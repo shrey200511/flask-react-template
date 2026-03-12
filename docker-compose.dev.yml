@@ -1,0 +1,56 @@
+services:
+  app:
+    platform: 'linux/amd64'
+    image: 'flask-react-template'
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_ENV: 'development'
+    environment:
+      APP_ENV: 'development'
+      MONGODB_URI: 'mongodb://app-db:27017/flask-react-template-dev'
+      CELERY_BROKER_URL: 'redis://redis:6379/0'
+      CELERY_RESULT_BACKEND: 'redis://redis:6379/0'
+      PIPENV_VENV_IN_PROJECT: '1'
+    # Ensure dependencies are installed before starting services
+    # Check if node_modules has content, not just if directory exists
+    command: /bin/sh -c "([ -n \"$(ls -A node_modules 2>/dev/null)\" ] || npm install) && ([ -f .venv/bin/python ] || pipenv install --dev --python python3.12) && npm run serve"
+    # Override to root user for local development to avoid bind mount permission issues
+    user: root
+    depends_on:
+      app-db:
+        condition: service_started
+      redis:
+        condition: service_started
+    ports:
+      - '3000:3000'
+      - '8080:8080'
+      - '5555:5555'
+    volumes:
+      # Mount local directory to /opt/app for hot reload
+      - './:/opt/app:delegated'
+      # Preserve node_modules from image build
+      - '/opt/app/node_modules/'
+      # Preserve .venv in anonymous volume (prevents empty local .venv from breaking pipenv)
+      - '/opt/app/.venv'
+    working_dir: /opt/app
+
+  app-db:
+    image: mongo:5.0
+    command:
+      - '--logpath'
+      - '/var/log/mongod.log'
+    ports:
+      - '27017:27017'
+    volumes:
+      - './data/mongodb:/data/db'
+      - './logs/mongodb:/var/log'
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - './data/redis:/data'
+    command: redis-server --appendonly yes

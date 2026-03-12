@@ -1,0 +1,291 @@
+# Project Overview
+
+Flask React Template is a full-stack application that pairs a modular Flask backend with a React + TypeScript frontend. MongoDB is the primary data store, Celery + Redis handle background jobs, and both halves of the stack share a focus on layered, testable architecture.
+
+**Stack:**
+
+- **Backend:** Python 3.12 · Flask 3 · PyMongo · Pydantic · Celery
+- **Frontend:** React 18 · TypeScript · Tailwind CSS · Axios
+- **Infrastructure:** MongoDB · Redis
+- **Build Tooling:** Webpack 5 · Pipenv · npm scripts
+- **Testing:** Pytest + pytest-cov
+- **Deployment:** Docker · Kubernetes
+
+**Key Directories:**
+
+- `/src/apps/backend` – Flask application and domain modules
+- `/src/apps/frontend` – React single-page app
+- `/tests` – Backend test suite (pytest)
+- `/docs` – Architecture and operational documentation
+- `/config` – Shared configuration and environment settings
+
+## Build and Test Commands
+
+```bash
+# Launch backend, frontend, and workers together
+npm run serve
+
+# Run only the Flask API (Gunicorn with reload)
+npm run serve:backend
+
+# Run only Celery workers
+npm run serve:worker
+
+# Run only Celery beat scheduler (cron jobs)
+npm run serve:beat
+
+# Start Flower dashboard (worker monitoring UI at `localhost:5555`)
+npm run serve:flower
+
+# Start the React dev server with hot reload
+npm run serve:frontend
+
+# Build production bundles for both backend assets and frontend
+npm run build
+
+# Backend test suite with coverage (pytest)
+npm run test
+
+# Python linting (mypy + pylint)
+npm run lint:py
+
+# TypeScript / React linting
+npm run lint:ts
+
+# Markdown linting
+npm run lint:md
+```
+
+Use `pipenv install --dev` (from `src/apps/backend`) to bootstrap backend tooling and `npm install` for frontend dependencies.
+
+## Architecture Principles
+
+### Backend Architecture
+
+- **Modular Design:** Each domain module (account, authentication, application, task, etc.) under `modules/` owns its REST API, service, and persistence layers.
+- **Layered Structure:** HTTP (Flask blueprints) → View → Service → Reader/Writer → Repository → MongoDB.
+- **Encapsulation:** Only expose `*_service.py`, `types.py`, and module-specific exceptions. Everything under `internal/` is private.
+- **Clear Data Models:** Use Pydantic models and dataclasses to validate inputs/outputs at the boundaries.
+
+### Frontend Architecture
+
+- **Layer-Based:** Pages → Components → Contexts → Services.
+- **State Management:** Prefer React Context + hooks; avoid introducing Redux-like solutions without team approval.
+- **Service Layer:** All API calls flow through typed service modules that convert JSON into domain models/interfaces.
+
+## Review Guidelines
+
+### General Programming Principles
+
+#### 1. Code Documentation
+
+- **DO** write comments that capture intent, invariants, or non-obvious design decisions.
+- **DON'T** narrate what the code already states.
+
+#### 2. Naming Conventions
+
+- Follow PEP 8 for Python (snake_case functions & variables, PascalCase classes) and idiomatic TypeScript naming.
+- Choose descriptive names that communicate purpose.
+- Avoid verb-based names for Python classes or React components. Functions, methods, and hooks should be verbs (e.g., `load_account`, `fetchUserData`).
+
+#### 3. Function Size and Complexity
+
+- Keep functions focused on a single responsibility.
+- Break apart routines that exceed ~50 lines or mix multiple concerns.
+- Prefer clear helper names over comments explaining control flow.
+
+#### 4. Object-Oriented & Layered Design
+
+- Keep domain behavior alongside the data it manipulates (services, domain objects, Pydantic models).
+- Avoid scattering related logic across shared utilities when it belongs to a specific module.
+
+#### 5. Defensive Programming
+
+- Avoid sprinkling `if value is None` / optional checks without understanding nullability.
+- Validate inputs at module boundaries (Pydantic models, request schemas) and rely on the types afterwards.
+
+#### 6. Encapsulation Over Utilities
+
+- Place behavior within the relevant module (e.g., reader/writer helpers) instead of creating broad utility modules.
+
+#### 7. Code Reuse
+
+- Audit existing modules, services, and hooks before writing new ones.
+- Extract shared logic rather than duplicating code across modules or components.
+
+---
+
+### Backend-Specific Guidelines
+
+#### 8. Module Independence
+
+- **DON'T** import from another module's `internal/` packages.
+- **DO** rely on the public service API (`*_service.py`) or shared types.
+
+#### 9. Database Indexes & Data Access
+
+- Ensure MongoDB indexes cover every `find`, `find_one`, aggregation `$match`, or `sort` pattern.
+- Declare indexes in the repository layer (`internal/store/*_repository.py`).
+
+#### 10. API Design
+
+- Favor RESTful CRUD semantics: `GET`, `POST`, `PATCH`, `DELETE` on resource nouns.
+- Provide a single `update` method per resource that accepts a well-defined DTO instead of field-specific methods.
+
+#### 11. Business Logic Placement
+
+- Keep business rules in the service layer.
+- Avoid embedding domain logic inside Flask views or CLI scripts—delegate to services.
+
+#### 12. Background Jobs
+
+- Use Celery workers for async job processing (document processing, entity extraction, etc.).
+- Define workers in `modules/application/workers/` inheriting from `Worker`.
+- Use cron schedules for recurring tasks (e.g., `cron_schedule = "*/10 * * * *"`).
+
+#### 13. Query Efficiency
+
+- Guard against N+1 queries by batching lookups or using aggregation pipelines.
+- Push filtering into Mongo queries instead of post-processing large in-memory lists.
+
+---
+
+### Frontend-Specific Guidelines
+
+#### 14. Styling Practices
+
+- **DON'T** use inline styles.
+- **DO** rely on Tailwind utility classes or shared CSS modules as needed.
+
+#### 15. Component Contracts & Variants
+
+- Avoid per-page style overrides. Create component variants/props for different presentations.
+- Shared layout primitives should live under `src/apps/frontend/components` or `layouts` rather than page folders.
+
+#### 16. Data Fetching & State
+
+- Fetch data through service modules under `services/` or `api/`.
+- Normalize API responses into typed models before storing them in state.
+- Avoid performing side-effectful data fetching inside render without hooks.
+
+#### 17. List Rendering Performance
+
+- Batch API requests when rendering collections. Never fire N network calls for N items within a render loop.
+
+---
+
+## Security Considerations
+
+- Never log or echo PII.
+- Ensure protected routes are wrapped in authentication/authorization middleware (Flask decorators or blueprints).
+- Validate and sanitize all incoming data; prefer Pydantic models for request bodies and query params.
+- Use parameterized Mongo queries. Avoid building raw query strings with user input.
+- Keep secrets in environment variables or Doppler; never commit credentials.
+
+## Testing Requirements
+
+- Add or update pytest coverage for new backend endpoints or services (`tests/modules/...`).
+- Place integration tests alongside module directories under `tests/modules/<module>/`.
+- Target ≥60% coverage (80% preferred). Pytest runs with coverage reporting via `npm run test` or `make run-test`.
+
+## Commit and PR Guidelines
+
+### Commit Messages
+
+Format:
+
+```
+<type>(<scope>): <subject>
+```
+
+Where `<scope>` is optional.
+
+```
+feat(claims): add confidence bounds validation
+^--^ ^----^   ^-----------------------------^
+|    |        |
+|    |        +-> Summary in present tense, imperative mood
+|    +-> Scope: component or module affected
++-> Type
+```
+
+Types:
+
+- `feat` — new feature for users
+- `fix` — bug fix for users
+- `docs` — documentation only
+- `style` — formatting, no logic change
+- `refactor` — code restructuring, no behavior change
+- `test` — adding or updating tests
+- `chore` — maintenance tasks
+- `build` — build system or dependencies
+- `ci` — CI configuration
+- `perf` — performance improvements
+- `revert` — reverts a previous commit
+
+Breaking changes: add `!` after type:
+
+```
+feat(api)!: remove deprecated endpoint
+```
+
+Rules:
+
+- 50 characters max for subject line
+- Use present tense, imperative mood ("add" not "added")
+- No period at end
+- Write messages that communicate the why/purpose
+
+Examples:
+
+- `feat(account): add email verification flow`
+- `fix(auth): preserve session on token refresh`
+- `refactor(store): extract append-only writer`
+- `docs: update deployment architecture guide`
+
+### PR Title Format
+
+PR titles follow the same semantic format as commit messages:
+
+```
+<type>(<scope>): <subject>
+```
+
+This ensures consistency across commits, PRs, and changelogs. The title prefix also drives automatic labeling (see below).
+
+### Auto-Labeling
+
+PRs are automatically labeled based on title prefix via the `pr-labeler` workflow:
+
+| PR Title Prefix              | Type Label                 | Semver Label    |
+| ---------------------------- | -------------------------- | --------------- |
+| `feat:`                      | `type: feat`               | `semver: minor` |
+| `fix:`                       | `type: fix`                | `semver: patch` |
+| `perf:`                      | `type: perf`               | `semver: patch` |
+| `docs:`                      | `type: docs`               | —               |
+| `style:`                     | `type: style`              | —               |
+| `refactor:`                  | `type: refactor`           | —               |
+| `test:`                      | `type: test`               | —               |
+| `chore:`                     | `type: chore`              | —               |
+| `ci:`                        | `type: ci`                 | —               |
+| Breaking (`feat!:`, `fix!:`) | `type: feat` / `type: fix` | `semver: major` |
+
+Choose your type carefully — it determines the label and semver impact.
+
+### Pull Request Requirements
+
+- PR titles must follow the semantic format above.
+- Include a rationale and testing evidence in the PR body.
+- Keep diffs focused on a single concern.
+- All linting, type checks, and tests must pass (Python + TypeScript).
+- Link any related issues or tickets.
+
+---
+
+## Additional Resources
+
+- [Backend Architecture](docs/backend-architecture.md)
+- [Frontend Architecture](docs/frontend-architecture.md)
+- [Configuration Guide](docs/configuration.md)
+- [Testing Guide](docs/testing.md)
+- [Engineering Handbook](https://github.com/jalantechnologies/handbook/blob/main/engineering/index.md)

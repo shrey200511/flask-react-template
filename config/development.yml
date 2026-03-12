@@ -1,0 +1,34 @@
+logger:
+  transports: ['console']
+
+mongodb:
+  uri: 'mongodb://localhost:27017/flask-react-template-dev'
+
+celery:
+  broker_url: 'redis://localhost:6379/0'
+  result_backend: 'redis://localhost:6379/0'
+
+worker:
+  health_check_url: 'http://localhost:8080/api/'
+
+sms:
+  enabled: false
+
+is_server_running_behind_proxy: false
+
+public:
+  authenticationMechanism: 'EMAIL' #or 'PHONE'
+  default_otp:
+    enabled: true
+    code: '1234'
+
+account:
+  enable_bootstrap_tasks: true
+  create_test_user_account: true
+  test_user:
+    first_name: 'Dev'
+    last_name: 'User'
+    username: 'dev@example.com'
+    password: 'devpassword'
+
+BOOTSTRAP_APP: true

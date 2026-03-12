@@ -1,0 +1,67 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: $KUBE_APP-cronjob
+  namespace: $KUBE_NS
+  labels:
+    app: $KUBE_APP-cronjob
+    version: $GITHUB_SHA
+spec:
+  schedule: '10 * * * *'
+  concurrencyPolicy: 'Replace'
+  suspend: true
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: $KUBE_APP-cronjob
+        spec:
+          automountServiceAccountToken: false
+          # Security: Run all containers as non-root user 10001 to prevent privilege escalation
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            # Security: Enable kernel-level syscall filtering to reduce attack surface
+            seccompProfile:
+              type: RuntimeDefault
+          imagePullSecrets:
+            - name: regcred
+          containers:
+            - name: $KUBE_APP
+              image: $KUBE_DEPLOYMENT_IMAGE:$KUBE_DEPLOYMENT_TAG@$KUBE_DEPLOYMENT_DIGEST
+              imagePullPolicy: Always
+              # Security: Block privilege escalation, make filesystem read-only, drop all capabilities
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: '400Mi'
+                requests:
+                  cpu: 250m
+                  memory: '200Mi'
+              env:
+                - name: WEB_APP_HOST
+                  value: $KUBE_INGRESS_HOSTNAME
+              volumeMounts:
+                # Security: Use temporary volume for writable directory since root filesystem is read-only
+                - name: tmp
+                  mountPath: /opt/app/tmp
+                - name: secret-ref
+                  mountPath: /opt/app/secrets
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: secret-ref
+              secret:
+                secretName: $DOPPLER_MANAGED_SECRET_NAME
+          restartPolicy: OnFailure

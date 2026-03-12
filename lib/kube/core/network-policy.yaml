@@ -1,0 +1,175 @@
+---
+# Block all incoming traffic by default
+# This prevents unauthorized access to our pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: $KUBE_NS
+spec:
+  podSelector: {} # Apply to all pods
+  policyTypes:
+    - Ingress
+
+---
+# Block all outgoing traffic by default
+# This prevents data exfiltration and unauthorized external calls
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: $KUBE_NS
+spec:
+  podSelector: {} # Apply to all pods
+  policyTypes:
+    - Egress
+
+---
+# Allow our app to make necessary outbound connections
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress
+  namespace: $KUBE_NS
+spec:
+  podSelector:
+    matchLabels:
+      component: $KUBE_NS
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS lookups (needed for domain resolution)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+
+    # Allow HTTPS calls to external APIs
+    - ports:
+        - protocol: TCP
+          port: 443
+
+    # Allow MongoDB database connections
+    - ports:
+        - protocol: TCP
+          port: 27017
+
+    # Allow Redis connections (for Celery broker and result backend)
+    - ports:
+        - protocol: TCP
+          port: 6379
+
+---
+# Allow nginx ingress to reach our app
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-app
+  namespace: $KUBE_NS
+spec:
+  podSelector:
+    matchLabels:
+      # Use component label for consistent matching across all preview deployments
+      # This prevents downtime when commit hashes change between deployments
+      component: $KUBE_NS
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow traffic from nginx ingress controller (in default namespace)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        # Main app HTTP port
+        - protocol: TCP
+          port: 8080
+        # Flower dashboard port
+        - protocol: TCP
+          port: 5555
+
+---
+# Allow app and worker pods to connect to Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-redis
+  namespace: $KUBE_NS
+spec:
+  podSelector:
+    matchLabels:
+      redis: 'true'
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              component: $KUBE_NS
+      ports:
+        - protocol: TCP
+          port: 6379
+
+---
+# Allow ACME challenge solver pods for SSL certificate generation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-acme-challenges
+  namespace: $KUBE_NS
+spec:
+  podSelector:
+    matchLabels:
+      acme.cert-manager.io/http01-solver: 'true'
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow nginx ingress to reach ACME challenge endpoints
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 8089
+  egress:
+    # Allow DNS lookups for challenge solver pods
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+# Allow cleanup CronJob to reach the Kubernetes API server
+# The cleanup pod needs to list and delete ReplicaSets via kubectl
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cleanup-egress
+  namespace: $KUBE_NS
+spec:
+  podSelector:
+    matchLabels:
+      app: replicaset-cleanup
+  policyTypes:
+    - Egress
+  egress:
+    # Allow DNS lookups (needed for kubernetes.default.svc resolution)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow HTTPS to Kubernetes API server
+    - ports:
+        - protocol: TCP
+          port: 443
