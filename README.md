@@ -44,3 +44,21 @@ This project has three deployment environments that everyone can access:
 Once you have familiarized yourself with the documentation, head over to the [Engineering Handbook](https://github.com/jalantechnologies/handbook/blob/main/engineering/index.md) to learn about the best practices we follow at Better Software.
 
 PS: Before you start working on the application, these [three git settings](https://spin.atomicobject.com/git-configurations-default/) are a must-have!
+
+## Auto Deployment Setup
+
+### GitHub Secrets Required
+| Secret | Value |
+|--------|-------|
+| `SERVER_HOST` | Your server IP |
+| `SERVER_USER` | `ubuntu` or `root` |
+| `SERVER_SSH_KEY` | Contents of `~/.ssh/id_rsa` |
+
+### Deployment Flow
+Code Push → GitHub Actions → Self-hosted Runner → deploy.sh → Build React → Start Backend
+
+### How to Test
+1. Make any code change
+2. `git add . && git commit -m "test" && git push origin main`
+3. Go to Actions tab → watch Auto Deploy run
+4. Deployment completes automatically
