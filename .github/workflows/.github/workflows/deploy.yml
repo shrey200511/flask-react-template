@@ -1,0 +1,21 @@
+name: Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - deploy-automation
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run deploy script
+        shell: bash
+        run: |
+          bash deploy.sh
+          
