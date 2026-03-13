@@ -13,6 +13,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Run deploy script
-        shell: bash
-        run: bash deploy.sh
+      - name: Install frontend dependencies
+        run: |
+          cd src/apps/frontend
+          npm ci
+          npm run build
+
+      - name: Install backend dependencies
+        run: |
+          cd src/apps/backend
+          python -m venv venv
+          .\venv\Scripts\activate
+          pip install -r requirements.txt
+          pip install gunicorn
+
+      - name: Start backend
+        run: |
+          cd src/apps/backend
+          .\venv\Scripts\activate
+          Start-Process python -ArgumentList "app.py" -NoNewWindow
+
+      - name: Done
+        run: echo "Deployment completed successfully!"
